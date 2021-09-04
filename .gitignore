@@ -1,0 +1,4 @@
+#ignore *.jsaon in IAC, we don't want to checkin the generated bicep output
+/iac/**/*.json
+#don't ignore the parameter files used for parametervalues during deployment
+!/iac/main.parameters*.json

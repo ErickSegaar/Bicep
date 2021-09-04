@@ -1,0 +1,43 @@
+parameters:
+- name: azureResourceManagerConnection
+  type: string 
+- name: subscriptionId
+  type: string 
+- name: templateFile
+  type: string
+- name: parameterFile
+  type: string
+
+jobs:
+- job: Ubuntu
+  pool:
+    vmImage: 'ubuntu-latest'
+
+  variables:
+    templateFilePath: '$(System.ArtifactsDirectory)/drop/templates/${{ parameters.templateFile }}'
+    parameterFile: '$(System.ArtifactsDirectory)/drop/templates/${{ parameters.parameterFile }}'
+
+  steps:
+  - checkout: none
+  - task: DownloadBuildArtifacts@1
+    inputs:
+      buildType: 'current'
+      downloadType: 'single'
+      artifactName: 'drop'
+      downloadPath: '$(System.ArtifactsDirectory)'
+
+  - task: AzureCLI@2
+    inputs:
+      azureSubscription: '${{ parameters.azureResourceManagerConnection }}' 
+      scriptType: 'pscore'
+      scriptLocation: 'inlineScript'
+      inlineScript: |
+        az deployment sub create `
+                --template-file '${{ variables.templateFilePath }}' `
+                --subscription '${{ parameters.subscriptionId }}' `
+                --location westeurope `
+                --parameters '${{ variables.parameterFile }}' `
+                --output tsv
+        if ($LASTEXITCODE) {
+          throw "Unable to deploy bicep to subscriptionid ${{ parameters.subscriptionId }}"
+        }

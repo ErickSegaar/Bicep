@@ -1,0 +1,51 @@
+trigger:
+  branches:
+    include:
+    - main
+
+pool:
+  vmImage: windows-latest
+
+variables:
+  bicepFolderPath: $(Build.SourcesDirectory)/iac
+  mainBicepFilePath: ${{ variables.BicepFolderPath }}/main.bicep
+
+  developmentAzureResourceManagerConnection: $(developmentArmConnection)
+  developmentSubscriptionId: $(developmentSubscription)
+
+  productionAzureResourceManagerConnection: $(productionArmConnection)
+  productionSubscriptionId: $(productionSubscription)
+
+stages:
+- stage: Build
+  displayName: Build Stage
+  jobs:
+  - job: RunOnUbuntu
+    displayName: Run on Ubuntu
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - template: templates/build-infrastructure-template.yaml
+      parameters:
+        bicepFilePath: '${{ variables.mainBicepFilePath }}'
+        bicepFolderPath: '${{ variables.bicepFolderPath }}'
+
+- stage: DeployDevelopment
+  displayName: Development stage
+  jobs:
+  - template: templates/deploy-infrastructure-template.yaml  
+    parameters:
+      azureResourceManagerConnection: '${{ variables.developmentAzureResourceManagerConnection }}'
+      subscriptionId: '${{ variables.developmentSubscriptionId }}'
+      templateFile: 'main.json'
+      parameterFile: 'main.parameters.dev.json'
+
+- stage: DeployProduction
+  displayName: Production stage
+  jobs:
+  - template: templates/deploy-infrastructure-template.yaml  
+    parameters:
+      azureResourceManagerConnection: '${{ variables.productionAzureResourceManagerConnection }}'
+      subscriptionId: '${{ variables.productionSubscriptionId }}'
+      templateFile: 'main.json'
+      parameterFile: 'main.parameters.prod.json'

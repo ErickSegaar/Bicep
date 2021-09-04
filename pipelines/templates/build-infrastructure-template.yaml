@@ -1,0 +1,27 @@
+parameters:
+- name: bicepFilePath
+  type: string 
+- name: bicepFolderPath
+  type: string 
+
+steps:
+  - checkout: self
+    path: src
+
+  - task: PowerShell@2
+    displayName: Bicep Build
+    inputs:
+      targetType: 'inline'
+      script: |
+        az bicep build --file '${{ parameters.bicepFilePath }}'
+      pwsh: true
+
+  - task: CopyFiles@2
+    displayName: 'Copy templates to $(build.artifactstagingdirectory)/templates'
+    inputs:
+      SourceFolder: '${{ parameters.bicepFolderPath }}'
+      Contents: '*.json'
+      TargetFolder: '$(build.artifactstagingdirectory)/templates'
+
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish Artifact: drop'
