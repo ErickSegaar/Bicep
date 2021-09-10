@@ -1,0 +1,113 @@
+name: bicep/Bicep
+on:
+  push:
+    branches:
+    - master
+env:
+  BICEPFOLDERPATH: "${{ github.workspace }}/iac"
+  DEVELOPMENTARMCONNECTION: Visual Studio Enterprise with MSDN(dcf90f5e-4358-4e7e-808a-a8b81838e919)
+  DEVELOPMENTAZURERESOURCEMANAGERCONNECTION: "${{ env.developmentArmConnection }}"
+  DEVELOPMENTSUBSCRIPTION: dcf90f5e-4358-4e7e-808a-a8b81838e919
+  DEVELOPMENTSUBSCRIPTIONID: "${{ env.developmentSubscription }}"
+  MAINBICEPFILEPATH: "${{ github.workspace }}/iac/main.bicep"
+  PRODUCTIONARMCONNECTION: Visual Studio Enterprise with MSDN(dcf90f5e-4358-4e7e-808a-a8b81838e919)
+  PRODUCTIONAZURERESOURCEMANAGERCONNECTION: "${{ env.productionArmConnection }}"
+  PRODUCTIONSUBSCRIPTION: dcf90f5e-4358-4e7e-808a-a8b81838e919
+  PRODUCTIONSUBSCRIPTIONID: "${{ env.productionSubscription }}"
+jobs:
+  Build-RunOnUbuntu:
+    name: Run on Ubuntu
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        path: src
+    - name: Bicep Build
+      run: az bicep build --file '${{ github.workspace }}/iac/main.bicep'
+      shell: pwsh
+    # The following script preserves the globbing behavior of the CopyFiles task.
+    # Refer to this transformer's documentation for an alternative that will work in simple cases.
+    - name: Copy templates to ${{ runner.temp }}/templates
+      uses: actions/github-script@v3
+      env:
+        TARGET_FOLDER: "${{ runner.temp }}/templates"
+        SOURCE_FOLDER: "${{ github.workspace }}/iac"
+        CONTENTS: "*.json"
+      with:
+        github-token: "${{ secrets.GITHUB_TOKEN }}"
+        script: |-
+          const fs = require('fs').promises
+          const path = require('path')
+          const target = path.resolve(process.env.TARGET_FOLDER)
+          process.chdir(process.env.SOURCE_FOLDER || '.')
+          if (process.env.CLEAN_TARGET_FOLDER === 'true') await io.rmRF(target)
+          const flattenFolders = process.env.FLATTEN_FOLDERS === 'true'
+          const options = {force: process.env.OVERWRITE === 'true'}
+          const globber = await glob.create(process.env.CONTENTS || '**')
+          for await (const file of globber.globGenerator()) {
+            if ((await fs.lstat(file)).isDirectory()) continue
+            const filename = flattenFolders ? path.basename(file) : file.substring(process.cwd().length)
+            const dest = path.join(target, filename)
+            await io.mkdirP(path.dirname(dest))
+            await io.cp(file, dest, options)
+          }
+    - name: 'Publish Artifact: drop'
+      uses: actions/upload-artifact@v2
+      with:
+        path:
+  DeployDevelopment-Ubuntu:
+    needs:
+    - Build-RunOnUbuntu
+    runs-on: ubuntu-latest
+    env:
+      PARAMETERFILE: "${{ github.workspace }}/drop/templates/main.parameters.dev.json"
+      TEMPLATEFILEPATH: "${{ github.workspace }}/drop/templates/main.json"
+    steps:
+    - uses: actions/download-artifact@v2
+      with:
+        name: drop
+        path: drop
+    - uses: Azure/login@v1
+      with:
+        creds: "${{ secrets.AZURE_CREDENTIALS }}"
+    - run: |-
+        $ErrorActionPreference = 'stop'
+        az deployment sub create `
+                --template-file '${{ github.workspace }}/drop/templates/main.json' `
+                --subscription '${{ env.developmentSubscription }}' `
+                --location westeurope `
+                --parameters '${{ github.workspace }}/drop/templates/main.parameters.dev.json' `
+                --output tsv
+        if ($LASTEXITCODE) {
+          throw "Unable to deploy bicep to subscriptionid ${{ env.developmentSubscription }}"
+        }
+        if ((Test-Path -LiteralPath variable:\LASTEXITCODE)) { exit $LASTEXITCODE }
+      shell: pwsh
+  DeployProduction-Ubuntu:
+    needs:
+    - DeployDevelopment-Ubuntu
+    runs-on: ubuntu-latest
+    env:
+      PARAMETERFILE: "${{ github.workspace }}/drop/templates/main.parameters.prod.json"
+      TEMPLATEFILEPATH: "${{ github.workspace }}/drop/templates/main.json"
+    steps:
+    - uses: actions/download-artifact@v2
+      with:
+        name: drop
+        path: drop
+    - uses: Azure/login@v1
+      with:
+        creds: "${{ secrets.AZURE_CREDENTIALS }}"
+    - run: |-
+        $ErrorActionPreference = 'stop'
+        az deployment sub create `
+                --template-file '${{ github.workspace }}/drop/templates/main.json' `
+                --subscription '${{ env.productionSubscription }}' `
+                --location westeurope `
+                --parameters '${{ github.workspace }}/drop/templates/main.parameters.prod.json' `
+                --output tsv
+        if ($LASTEXITCODE) {
+          throw "Unable to deploy bicep to subscriptionid ${{ env.productionSubscription }}"
+        }
+        if ((Test-Path -LiteralPath variable:\LASTEXITCODE)) { exit $LASTEXITCODE }
+      shell: pwsh
