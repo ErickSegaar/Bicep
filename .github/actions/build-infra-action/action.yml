@@ -1,0 +1,27 @@
+name: "Build infra artifact"
+description: "Build arm template from bicep and upload it as artifact"
+
+inputs:
+  bicepFilePath:
+    description: “Path to the bicep file”
+    required: true
+  armFilePath:
+    description: “Path to the generated arm file”
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+      - name: Build bicep
+        uses: azure/CLI@v1
+        with:
+          azcliversion: 2.21.0
+          inlineScript: |
+            az bicep build --files ${{inputs.bicepFilePath}}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: drop
+          path: |
+            ${{inputs.armFilePath}}
