@@ -27,5 +27,5 @@ jobs:
       - uses: ./.github/actions/build-infra-action
         name: build infra structure
         with:
-          bicepFilePath: "${{ github.workspace }}/iac/main.bicep"
-          armFilePath: "${{ github.workspace }}/iac/main.json"
+          bicepFilePath: "./iac/main.bicep"
+          armFilePath: "./iac/main.json"
