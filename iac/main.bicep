@@ -27,3 +27,8 @@ module keyVault 'Keyvault/keyvault.bicep' = {
     workspaceId: logAnalytics.outputs.id
   }
 }
+
+module runScript 'DeploymentScript/deployment-script.bicep' = {
+  scope: resourceGroup
+  name: 'runCustomScript'
+}
